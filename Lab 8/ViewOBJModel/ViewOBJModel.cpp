@@ -31,6 +31,9 @@
 const unsigned int SCR_WIDTH = 800;
 const unsigned int SCR_HEIGHT = 600;
 
+//pus de mine
+bool FPS = true;
+
 enum ECameraMovementType
 {
 	UNKNOWN,
@@ -214,6 +217,11 @@ private:
 		up = glm::normalize(glm::cross(right, forward));
 	}
 
+public:
+	void setPosition(const glm::vec3& position)
+	{
+		this->position = position;
+	}
 
 protected:
 	const float cameraSpeedFactor = 250.0f;
@@ -262,6 +270,9 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 	if (key == GLFW_KEY_A && action == GLFW_PRESS) {
 
 	}
+
+	if (!FPS) //daca sunt in tren tastele de miscare nu merg
+	{
 		if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
 			glfwSetWindowShouldClose(window, true);
 
@@ -277,6 +288,7 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 			pCamera->ProcessKeyboard(UP, (float)deltaTime);
 		if (glfwGetKey(window, GLFW_KEY_PAGE_DOWN) == GLFW_PRESS)
 			pCamera->ProcessKeyboard(DOWN, (float)deltaTime);
+	}
 
 	if (glfwGetKey(window, GLFW_KEY_R) == GLFW_PRESS) {
 		int width, height;
@@ -284,6 +296,19 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 		pCamera->Reset(width, height);
 
 	}
+
+
+	//Puse de la mine
+	if (glfwGetKey(window, GLFW_KEY_I) == GLFW_PRESS)
+	{
+		FPS = true;
+	}
+
+	if (glfwGetKey(window, GLFW_KEY_O) == GLFW_PRESS)
+	{
+		FPS = false;
+	}
+
 
 }
 
@@ -420,6 +445,7 @@ int main()
 	std::string trainObjFileName = (currentPath + "\\Models\\Train\\train.obj");
 	Model trainModel(trainObjFileName, false);
 
+	glm::vec3 cameraOffset(0.0f, 2.0f, 2.0f); // Camera este deasupra și în spatele trenului
 
 	// render loop
 	while (!glfwWindowShouldClose(window)) {
@@ -473,19 +499,23 @@ int main()
 		//piratObjModel.Draw(lightingWithTextureShader);
 
 		// Draw Grass
-		glm::mat4 GrassLawnModelMatrix = glm::scale(glm::mat4(1.0), glm::vec3(10000.0f,1.0,10000.0));
+		glm::mat4 GrassLawnModelMatrix = glm::scale(glm::mat4(1.0), glm::vec3(10000.0f, 1.0, 10000.0));
 		lightingWithTextureShader.setMat4("model", GrassLawnModelMatrix);
 		GrassLawnModel.Draw(lightingWithTextureShader);
-		
+
 		// TRAIN
-		
+
 		glm::mat4 trainModelMatrix = glm::scale(glm::mat4(1.0), glm::vec3(1.0f));
 		//trainModelMatrix = glm::translate(model, cubePos);
 		trainModelMatrix = glm::rotate(trainModelMatrix, glm::radians(180.0f), glm::vec3(0.0f, 1.0f, 0.0f)); //schimbarea rotatiei
-		trainModelMatrix = glm::translate(trainModelMatrix,trainPos);
+		trainModelMatrix = glm::translate(trainModelMatrix, trainPos);
 		lightingWithTextureShader.setMat4("model", trainModelMatrix);
 		trainModel.Draw(lightingWithTextureShader);
 
+		if (FPS)
+		{
+			pCamera->setPosition(cameraOffset - trainPos);
+		}
 
 		glBindVertexArray(lightVAO);
 		glDrawArrays(GL_TRIANGLES, 0, 36);
