@@ -468,7 +468,7 @@ int main()
 		lightingShader.use();
 		lightingShader.SetVec3("objectColor", 0.5f, 1.0f, 0.31f);
 		lightingShader.SetVec3("lightColor", 1.0f, 1.0f, 1.0f);
-		lightingShader.SetVec3("lightPos", cubePos);
+		lightingShader.SetVec3("lightPos", glm::vec3(0.0f, 5.0f, 0.0f));
 		lightingShader.SetVec3("viewPos", pCamera->GetPosition());
 
 		lightingShader.setMat4("projection", pCamera->GetProjectionMatrix());
@@ -484,7 +484,7 @@ int main()
 		lightingWithTextureShader.use();
 		lightingWithTextureShader.SetVec3("objectColor", 0.5f, 1.0f, 0.31f);
 		lightingWithTextureShader.SetVec3("lightColor", 1.0f, 1.0f, 1.0f);
-		lightingWithTextureShader.SetVec3("lightPos", cubePos);
+		lightingWithTextureShader.SetVec3("lightPos", glm::vec3(0.0f, 5.0f, 0.0f));
 		lightingWithTextureShader.SetVec3("viewPos", pCamera->GetPosition());
 		lightingWithTextureShader.setInt("texture_diffuse1", 0);
 
@@ -516,6 +516,18 @@ int main()
 		{
 			pCamera->setPosition(cameraOffset - trainPos);
 		}
+
+
+
+		// also draw the lamp object
+		lampShader.use();
+		lampShader.setMat4("projection", pCamera->GetProjectionMatrix());
+		lampShader.setMat4("view", pCamera->GetViewMatrix());
+		//glm::mat4 lightModel = glm::translate(glm::mat4(1.0), lightPos);
+		glm::mat4 lightModel = glm::scale(glm::mat4(1.0), glm::vec3(5.0f));
+		lightModel = glm::translate(lightModel, glm::vec3(0.0f, 5.0f, 0.0f));
+		lampShader.setMat4("model", lightModel);
+
 
 		glBindVertexArray(lightVAO);
 		glDrawArrays(GL_TRIANGLES, 0, 36);
