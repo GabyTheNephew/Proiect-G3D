@@ -415,7 +415,33 @@ int main()
 	// Create camera
 	pCamera = new Camera(SCR_WIDTH, SCR_HEIGHT, glm::vec3(0.0, 3.0, 3.0));
 
-	glm::vec3 lightPos(0.0f, 2.0f, 1.0f);
+
+	// FBO pentru umbre
+	unsigned int depthMapFBO;
+	glGenFramebuffers(1, &depthMapFBO);
+
+	// Textura pentru harta umbrelor
+	unsigned int depthMap;
+	glGenTextures(1, &depthMap);
+	glBindTexture(GL_TEXTURE_2D, depthMap);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, 1024, 1024, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+	float borderColor[] = { 1.0, 1.0, 1.0, 1.0 };
+	glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, borderColor);
+
+	// Atașare la framebuffer
+	glBindFramebuffer(GL_FRAMEBUFFER, depthMapFBO);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, depthMap, 0);
+	glDrawBuffer(GL_NONE);
+	glReadBuffer(GL_NONE);
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+
+
+	//glm::vec3 lightPos(0.0f, 2.0f, 1.0f);
 	glm::vec3 cubePos(0.0f, 5.0f, 1.0f);
 	glm::vec3 trainPos(0.0f, 0.0f, 0.0f);
 
@@ -431,12 +457,14 @@ int main()
 	Shader lightingShader((currentPath + "\\Shaders\\PhongLight.vs").c_str(), (currentPath + "\\Shaders\\PhongLight.fs").c_str());
 	Shader lightingWithTextureShader((currentPath + "\\Shaders\\PhongLightWithTexture.vs").c_str(), (currentPath + "\\Shaders\\PhongLightWithTexture.fs").c_str());
 	Shader lampShader((currentPath + "\\Shaders\\Lamp.vs").c_str(), (currentPath + "\\Shaders\\Lamp.fs").c_str());
+	Shader depthShader((currentPath + "\\Shaders\\depth_shader.vs").c_str(), 
+                   (currentPath + "\\Shaders\\depth_shader.fs").c_str());
 
-	std::string objFileName = (currentPath + "\\Models\\FlyingCube.obj");
+	/*std::string objFileName = (currentPath + "\\Models\\FlyingCube.obj");
 	FlyingCube flyingCubeModel(objFileName, false);
 
 	std::string piratObjFileName = (currentPath + "\\Models\\Pirat\\Pirat.obj");
-	Model piratObjModel(piratObjFileName, false);
+	Model piratObjModel(piratObjFileName, false);*/
 
 
 	std::string GrassLawnFileName = (currentPath + "\\Models\\GrassLawn\\grassLawn.obj");
@@ -446,6 +474,24 @@ int main()
 	Model trainModel(trainObjFileName, false);
 
 	glm::vec3 cameraOffset(0.0f, 2.0f, 2.0f); // Camera este deasupra și în spatele trenului
+
+
+	//glm::mat4 lightProjection = glm::ortho(-20.0f, 20.0f, -20.0f, 20.0f, 1.0f, 50.0f);
+	///*glm::mat4 lightView = glm::lookAt(glm::vec3(0.0f, 10.0f, 0.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+	//glm::mat4 lightSpaceMatrix = lightProjection * lightView;*/
+	//glm::vec3 lightPos(0.0f, 15.0f, 5.0f); // Poziție mai sus și mai în față
+	//glm::mat4 lightView = glm::lookAt(lightPos, glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+	//glm::mat4 lightSpaceMatrix = lightProjection * lightView;
+
+	//glm::vec3 lightPos(0.0f, 20.0f, 10.0f); // Poziție mai înaltă și ușor înainte
+	//glm::mat4 lightView = glm::lookAt(lightPos, glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+	//glm::mat4 lightProjection = glm::ortho(-30.0f, 30.0f, -30.0f, 30.0f, 1.0f, 100.0f);
+	//glm::mat4 lightSpaceMatrix = lightProjection * lightView;
+
+	glm::vec3 lightPos(0.0f, 20.0f, 10.0f);
+	glm::mat4 lightProjection = glm::ortho(-200.0f, 200.0f, -200.0f, 200.0f, 1.0f, 500.0f);
+	glm::mat4 lightView = glm::lookAt(lightPos, trainPos, glm::vec3(0.0f, 1.0f, 0.0f));
+	glm::mat4 lightSpaceMatrix = lightProjection * lightView;
 
 	// render loop
 	while (!glfwWindowShouldClose(window)) {
@@ -457,6 +503,34 @@ int main()
 		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+		// Pasul 1: Randare pentru hartă de adâncime
+		depthShader.use();
+		depthShader.setMat4("lightSpaceMatrix", lightSpaceMatrix);
+
+		glViewport(0, 0, 1024, 1024);
+		glBindFramebuffer(GL_FRAMEBUFFER, depthMapFBO);
+		glClear(GL_DEPTH_BUFFER_BIT);
+
+		// Randare modele doar pentru hartă de umbre
+		/*glm::mat4 model = glm::mat4(1.0f);
+		model = glm::translate(model, trainPos);*/
+		glm::mat4 model = glm::translate(glm::mat4(1.0f), trainPos);
+		depthShader.setMat4("model", model);
+		trainModel.Draw(depthShader);
+
+		model = glm::scale(glm::mat4(1.0f), glm::vec3(10000.0f, 1.0f, 10000.0f));
+		depthShader.setMat4("model", model);
+		GrassLawnModel.Draw(depthShader);
+
+		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+		// Revenire la viewport-ul normal
+		glViewport(0, 0, SCR_WIDTH, SCR_HEIGHT);
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+
+
+
 		//lightPos.x = 2.5 * cos(glfwGetTime());
 		//lightPos.z = 2.5 * sin(glfwGetTime());
 
@@ -464,6 +538,10 @@ int main()
 		cubePos.z = 10 * cos(glfwGetTime());
 
 		trainPos.z += 0.01;
+
+		lightView = glm::lookAt(lightPos, trainPos, glm::vec3(0.0f, 1.0f, 0.0f));
+		lightSpaceMatrix = lightProjection * lightView;
+		depthShader.setMat4("lightSpaceMatrix", lightSpaceMatrix);
 
 		lightingShader.use();
 		lightingShader.SetVec3("objectColor", 0.5f, 1.0f, 0.31f);
@@ -474,12 +552,6 @@ int main()
 		lightingShader.setMat4("projection", pCamera->GetProjectionMatrix());
 		lightingShader.setMat4("view", pCamera->GetViewMatrix());
 
-		// Flying Cube
-		//glm::mat4 model = glm::scale(glm::mat4(1.0), glm::vec3(0.1f));
-		//model = glm::translate(model, cubePos);
-		//flyingCubeModel.SetRootTransf(model);
-		//lightingShader.setMat4("model", model); //asta era comentata de la profu
-		//flyingCubeModel.Draw(lightingShader);
 
 		lightingWithTextureShader.use();
 		lightingWithTextureShader.SetVec3("objectColor", 0.5f, 1.0f, 0.31f);
@@ -487,29 +559,36 @@ int main()
 		lightingWithTextureShader.SetVec3("lightPos", glm::vec3(0.0f, 5.0f, 0.0f));
 		lightingWithTextureShader.SetVec3("viewPos", pCamera->GetPosition());
 		lightingWithTextureShader.setInt("texture_diffuse1", 0);
+		lightingWithTextureShader.setMat4("lightSpaceMatrix", lightSpaceMatrix);
 
+
+		glActiveTexture(GL_TEXTURE1);
+		glBindTexture(GL_TEXTURE_2D, depthMap);
+		lightingWithTextureShader.setInt("shadowMap", 1);
 
 		lightingWithTextureShader.setMat4("projection", pCamera->GetProjectionMatrix());
 		lightingWithTextureShader.setMat4("view", pCamera->GetViewMatrix());
 
-		//Pirat
-		// 
-		//glm::mat4 piratModel = glm::scale(glm::mat4(1.0), glm::vec3(1.f));
-		//lightingWithTextureShader.setMat4("model", piratModel);
-		//piratObjModel.Draw(lightingWithTextureShader);
 
 		// Draw Grass
+		lightingWithTextureShader.setMat4("lightSpaceMatrix", lightSpaceMatrix);
 		glm::mat4 GrassLawnModelMatrix = glm::scale(glm::mat4(1.0), glm::vec3(10000.0f, 1.0, 10000.0));
 		lightingWithTextureShader.setMat4("model", GrassLawnModelMatrix);
+		glActiveTexture(GL_TEXTURE1);
+		glBindTexture(GL_TEXTURE_2D, depthMap);
+		lightingWithTextureShader.setInt("shadowMap", 1);
 		GrassLawnModel.Draw(lightingWithTextureShader);
 
 		// TRAIN
-
+		lightingWithTextureShader.setMat4("lightSpaceMatrix", lightSpaceMatrix);
 		glm::mat4 trainModelMatrix = glm::scale(glm::mat4(1.0), glm::vec3(1.0f));
 		//trainModelMatrix = glm::translate(model, cubePos);
 		trainModelMatrix = glm::rotate(trainModelMatrix, glm::radians(180.0f), glm::vec3(0.0f, 1.0f, 0.0f)); //schimbarea rotatiei
 		trainModelMatrix = glm::translate(trainModelMatrix, trainPos);
 		lightingWithTextureShader.setMat4("model", trainModelMatrix);
+		glActiveTexture(GL_TEXTURE1);
+		glBindTexture(GL_TEXTURE_2D, depthMap);
+		lightingWithTextureShader.setInt("shadowMap", 1);
 		trainModel.Draw(lightingWithTextureShader);
 
 		if (FPS)
