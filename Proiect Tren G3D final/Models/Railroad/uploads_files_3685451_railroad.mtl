@@ -1,0 +1,18 @@
+# Blender 4.3.1 MTL File: 'uploads_files_3685451_railroad.blend'
+# www.blender.org
+
+newmtl railroad
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.450000
+d 1.000000
+illum 2
+Ps 0.000000
+Pc 0.000000
+Pcr 0.030000
+aniso 0.000000
+anisor 0.000000
+map_Kd railroad_BaseColor.png
+map_Pm railroad_Metallic.png
+map_Pr railroad_Roughness.png
+map_Bump -bm 1.000000 railroad_Normal.png
