@@ -8,6 +8,7 @@
 #include <stb_image.h>
 #include <stdio.h>
 #include <math.h> 
+#include <random>
 
 #include <GL/glew.h>
 
@@ -30,6 +31,8 @@
 #pragma comment (lib, "OpenGL32.lib")
 #pragma comment (lib, "OpenAL32.lib")
 
+#define M_PI 3.14159265358979323846
+
 // settings
 const unsigned int SCR_WIDTH = 2560;
 const unsigned int SCR_HEIGHT = 1440;
@@ -47,6 +50,12 @@ Shader lightingShader;
 Shader lightingWithTextureShader;
 Shader lampShader;
 Shader depthShader;
+
+std::vector<float> sphereVertices;
+std::vector<unsigned int> sphereIndices;
+unsigned int sphereVAO = 0;
+unsigned int sphereVBO = 0;
+unsigned int sphereEBO = 0;
 
 glm::vec3 lightPos(0.0f, 100.0f, -100.0f);
 glm::vec3 cubePos(0.0f, 5.0f, 1.0f);
@@ -86,7 +95,11 @@ Model rockModel;
 std::string cartObjFileName;
 Model cartModel;
 
+std::string signalFileName;
+Model signalModel;
+
 std::vector<glm::vec3> stationPosition(3);
+
 
 
 unsigned int loadCubemap(std::vector<std::string> faces);
@@ -99,11 +112,18 @@ ALuint trainWsitle = 0;
 
 float distanceBetweenGrass = 200.0f; // Distanța între bucăți de teren
 
+
 std::vector<glm::vec3> grassPositions;
 int numGrassPieces;
 std::vector<glm::vec3> treePositions;
 
 std::vector<glm::vec3> railPositions(85);
+
+std::vector<glm::vec3> lampPositions = {
+	glm::vec3(0.0f, 4.45f, 0.0f),
+	glm::vec3(0.0f, 4.45f, -distanceBetweenGrass),
+	glm::vec3(0.0f, 4.45f, -2 * distanceBetweenGrass)
+};
 
 enum ECameraMovementType
 {
@@ -466,29 +486,208 @@ std::vector<glm::vec3> GenerateTreePositions(int treeCount, float areaWidth, flo
 	return treePositions;
 }
 
-std::vector<glm::vec3> GenerateRockPositions(int rockCount, float spacing) {
+
+
+
+
+
+
+
+
+
+
+
+
+void createSphere(std::vector<float>& vertices, std::vector<unsigned int>& indices, float radius, unsigned int sectors, unsigned int stacks) {
+	float x, y, z, xy;                              // vertex position
+	float nx, ny, nz, lengthInv = 1.0f / radius;    // vertex normal
+	float s, t;                                     // vertex texCoord
+
+	float sectorStep = 2 * M_PI / sectors;
+	float stackStep = M_PI / stacks;
+	float sectorAngle, stackAngle;
+
+	for (unsigned int i = 0; i <= stacks; ++i) {
+		stackAngle = M_PI / 2 - i * stackStep;        // starting from pi/2 to -pi/2
+		xy = radius * cosf(stackAngle);             // r * cos(u)
+		z = radius * sinf(stackAngle);              // r * sin(u)
+
+		// add (sectors+1) vertices per stack
+		// the first and last vertices have same position and normal, but different tex coords
+		for (unsigned int j = 0; j <= sectors; ++j) {
+			sectorAngle = j * sectorStep;           // starting from 0 to 2pi
+
+			// vertex position (x, y, z)
+			x = xy * cosf(sectorAngle);             // r * cos(u) * cos(v)
+			y = xy * sinf(sectorAngle);             // r * cos(u) * sin(v)
+
+			// normalized vertex normal (nx, ny, nz)
+			nx = x * lengthInv;
+			ny = y * lengthInv;
+			nz = z * lengthInv;
+
+			vertices.push_back(x);
+			vertices.push_back(y);
+			vertices.push_back(z);
+			vertices.push_back(nx);
+			vertices.push_back(ny);
+			vertices.push_back(nz);
+		}
+	}
+
+	// generate CCW index list of sphere triangles
+	for (unsigned int i = 0; i < stacks; ++i) {
+		unsigned int k1 = i * (sectors + 1);     // beginning of current stack
+		unsigned int k2 = k1 + sectors + 1;      // beginning of next stack
+
+		for (unsigned int j = 0; j < sectors; ++j, ++k1, ++k2) {
+			// 2 triangles per sector excluding first and last stacks
+			if (i != 0) {
+				indices.push_back(k1);
+				indices.push_back(k2);
+				indices.push_back(k1 + 1);
+			}
+
+			if (i != (stacks - 1)) {
+				indices.push_back(k1 + 1);
+				indices.push_back(k2);
+				indices.push_back(k2 + 1);
+			}
+		}
+	}
+}
+
+// Add this as a global variable at the top of your file
+bool signalsPlacedDebugPrinted = false;
+
+
+void PlaceStationSignals(Shader& shader, Shader& lampShader, Model& signalModel,float globalOffset) {
+	glm::vec3 lightOffset(-0.6f, 6.5f, 2.0f);
+	float zLight = 0.22;
+	float yLight = 5.75;
+
+	// Offset-uri pentru sferele ROȘII
+	glm::vec3 topSphereOffset(-1.37f, yLight, zLight);
+	glm::vec3 bottomSphereOffset(1.03f, yLight, zLight);
+
+	// Offset-uri pentru sferele VERZI
+	glm::vec3 greenTopSphereOffset(-1.37f, yLight, zLight);
+	glm::vec3 greenBottomSphereOffset(1.025f, yLight, zLight);
+
+	// Left signal
+	glm::mat4 leftSignalMatrix = glm::mat4(0.9f);
+	glm::vec3 leftPos(-3.0f, 0.27f, -25.0f);
+	leftSignalMatrix = glm::translate(leftSignalMatrix, leftPos + glm::vec3(0.0f,0.0f, globalOffset));
+	leftSignalMatrix = glm::rotate(leftSignalMatrix, glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+	leftSignalMatrix = glm::scale(leftSignalMatrix, glm::vec3(1.2f));
+
+	glm::vec3 leftLightPos = leftPos + lightOffset;
+	shader.SetVec3("signalLightPos1", leftLightPos);
+	shader.SetVec3("signalLightColor1", glm::vec3(1.0f, 0.0f, 0.0f));
+	shader.setMat4("model", leftSignalMatrix);
+	signalModel.Draw(shader);
+
+	// Right signal
+	glm::mat4 rightSignalMatrix = glm::mat4(0.9f);
+	glm::vec3 rightPos(4.0f, 0.27f, -25.0f);
+	rightSignalMatrix = glm::translate(rightSignalMatrix, rightPos + glm::vec3(0.0f, 0.0f, globalOffset));
+	rightSignalMatrix = glm::rotate(rightSignalMatrix, glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+	rightSignalMatrix = glm::scale(rightSignalMatrix, glm::vec3(1.2f));
+
+	glm::vec3 rightLightPos = rightPos + lightOffset;
+	shader.SetVec3("signalLightPos2", rightLightPos);
+	shader.SetVec3("signalLightColor2", glm::vec3(0.0f, 1.0f, 0.0f));
+	shader.setMat4("model", rightSignalMatrix);
+	signalModel.Draw(shader);
+
+	// Desenăm sferele
+	lampShader.use();
+	lampShader.setMat4("projection", pCamera->GetProjectionMatrix());
+	lampShader.setMat4("view", pCamera->GetViewMatrix());
+
+	// Dimensiunea sferelor - ajustează pentru a se potrivi în cercuri
+	glm::mat4 sphereScale = glm::scale(glm::mat4(1.0f), glm::vec3(0.15f));
+
+	// Sfera roșie sus pentru semaforul din stânga
+	glm::mat4 leftTopSphereMat = glm::mat4(1.0f);
+	leftTopSphereMat = glm::translate(leftTopSphereMat, leftPos + topSphereOffset + glm::vec3(0.0f, 0.0f, globalOffset));
+	leftTopSphereMat = leftTopSphereMat * sphereScale;
+	lampShader.setMat4("model", leftTopSphereMat);
+	lampShader.SetVec3("lightColor", glm::vec3(1.0f, 0.0f, 0.0f));  // Roșu
+	glBindVertexArray(sphereVAO);
+	glDrawElements(GL_TRIANGLES, sphereIndices.size(), GL_UNSIGNED_INT, 0);
+
+	// Sfera roșie jos pentru semaforul din stânga
+	glm::mat4 leftBottomSphereMat = glm::mat4(1.0f);
+	leftBottomSphereMat = glm::translate(leftBottomSphereMat, leftPos + bottomSphereOffset + glm::vec3(0.0f, 0.0f, globalOffset));
+	leftBottomSphereMat = leftBottomSphereMat * sphereScale;
+	lampShader.setMat4("model", leftBottomSphereMat);
+	lampShader.SetVec3("lightColor", glm::vec3(1.0f, 0.0f, 0.0f));  // Roșu
+	glBindVertexArray(sphereVAO);
+	glDrawElements(GL_TRIANGLES, sphereIndices.size(), GL_UNSIGNED_INT, 0);
+
+	// Sfera verde sus pentru semaforul din dreapta
+	glm::mat4 rightTopSphereMat = glm::mat4(1.0f);
+	rightTopSphereMat = glm::translate(rightTopSphereMat, rightPos + greenTopSphereOffset + glm::vec3(0.0f, 0.0f, globalOffset));  // Folosim offset-ul verde
+	rightTopSphereMat = rightTopSphereMat * sphereScale;
+	lampShader.setMat4("model", rightTopSphereMat);
+	lampShader.SetVec3("lightColor", glm::vec3(0.0f, 1.0f, 0.0f));  // Verde
+	glBindVertexArray(sphereVAO);
+	glDrawElements(GL_TRIANGLES, sphereIndices.size(), GL_UNSIGNED_INT, 0);
+
+	// Sfera verde jos pentru semaforul din dreapta
+	glm::mat4 rightBottomSphereMat = glm::mat4(1.0f);
+	rightBottomSphereMat = glm::translate(rightBottomSphereMat, rightPos + greenBottomSphereOffset + glm::vec3(0.0f, 0.0f, globalOffset));  // Folosim offset-ul verde
+	rightBottomSphereMat = rightBottomSphereMat * sphereScale;
+	lampShader.setMat4("model", rightBottomSphereMat);
+	lampShader.SetVec3("lightColor", glm::vec3(0.0f, 1.0f, 0.0f));  // Verde
+	glBindVertexArray(sphereVAO);
+	glDrawElements(GL_TRIANGLES, sphereIndices.size(), GL_UNSIGNED_INT, 0);
+
+	shader.use();
+}
+
+
+
+
+
+
+
+
+
+std::vector<glm::vec3> GenerateRockPositions(int rockCount) {
 	std::vector<glm::vec3> rockPositions;
-	float startZ = 200.0f;
-
-	srand(static_cast<unsigned>(time(0)));
-
+	std::random_device rd;
+	std::mt19937 gen(rd());
+	std::uniform_real_distribution<float> disX(-10.0f, 10.0f);
+	std::uniform_real_distribution<float> disY(200.0f, 600.0f);
+	std::uniform_real_distribution<float> disZ(0.5f, 1.0f);
+	std::uniform_real_distribution<float> disSide(20.0f, 30.0f);
+	std::uniform_int_distribution<int> disSideChoice(0, 1);
+	const float minDistance = 50.0f; // Distanța minimă între pietre
 	for (int i = 0; i < rockCount; ++i) {
-		float side = (i % 2 == 0) ? 1.0f : -1.0f;
-
-		
-		float randomX = ((float)rand() / RAND_MAX * 2.0f - 1.0f) * 4.0f; 
-		float randomY = ((float)rand() / RAND_MAX * 2.0f - 1.0f) * 6.0f; 
-		float randomZ = ((float)rand() / RAND_MAX * 2.0f - 1.0f) * 0.7f; 
-
 		glm::vec3 position;
-		position.x = (side * 12.0f) + randomX;   
-		position.y = startZ + (i * spacing) + randomY;
-		position.z = 2.9f + randomZ;
-
-		rockPositions.push_back(position);
+		bool validPosition = false;
+		while (!validPosition) {
+			float side = disSideChoice(gen) ? 1.0f : -1.0f;
+			position.x = (side * disSide(gen)) + disX(gen);
+			position.y = disY(gen);
+			position.z = disZ(gen);
+			validPosition = true;
+			for (const auto& existingPos : rockPositions) {
+				if (glm::distance(position, existingPos) < minDistance) {
+					validPosition = false;
+					break;
+				}
+			}
+			if (validPosition) {
+				rockPositions.push_back(position);
+			}
+		}
 	}
 	return rockPositions;
 }
+std::vector<glm::vec3> rockPositions = GenerateRockPositions(10);
 
 GLuint CreateDepthMapFBO(GLuint& depthMapTexture, const unsigned int shadowWidth, const unsigned int shadowHeight) {
 	GLuint depthMapFBO;
@@ -578,6 +777,17 @@ void RenderDepthMap(GLuint& depthMapFBO, Shader& shaderProgram, glm::mat4& light
 		cartModel.Draw(shaderProgram);
 	}
 
+	//ROCKS
+	for (const auto& pos : rockPositions) {
+		glm::mat4 rockModelMatrix = glm::mat4(1.0f);
+		rockModelMatrix = glm::translate(rockModelMatrix, glm::vec3(pos.x, pos.z, pos.y));
+		rockModelMatrix = glm::rotate(rockModelMatrix, glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+		rockModelMatrix = glm::scale(rockModelMatrix, glm::vec3(0.2f));
+		shaderProgram.setMat4("model", rockModelMatrix);
+		rockModel.Draw(shaderProgram);
+	}
+
+
 	//STATION
 	for (auto& pos : stationPosition)
 	{
@@ -589,6 +799,16 @@ void RenderDepthMap(GLuint& depthMapFBO, Shader& shaderProgram, glm::mat4& light
 		shaderProgram.setMat4("model", stationModelMatrix);
 		stationModel.Draw(shaderProgram);
 	}
+
+
+	//LIGHTS
+	for (const auto& pos : lampPositions)
+	{
+		//work in progress
+	}
+
+
+
 
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	glViewport(0, 0, SCR_WIDTH, SCR_HEIGHT); // Revenim la rezoluția normală
@@ -650,7 +870,7 @@ int main()
 	glfwSetKeyCallback(window, key_callback);
 
 	// tell GLFW to capture our mouse
-	//glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+	glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
 
 	
@@ -785,6 +1005,27 @@ int main()
 	glEnableVertexAttribArray(0);
 	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
 
+	createSphere(sphereVertices, sphereIndices, 0.9f, 36, 18);
+	glGenVertexArrays(1, &sphereVAO);
+	glGenBuffers(1, &sphereVBO);
+	glGenBuffers(1, &sphereEBO);
+
+	glBindVertexArray(sphereVAO);
+
+	glBindBuffer(GL_ARRAY_BUFFER, sphereVBO);
+	glBufferData(GL_ARRAY_BUFFER, sphereVertices.size() * sizeof(float), &sphereVertices[0], GL_STATIC_DRAW);
+
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, sphereEBO);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sphereIndices.size() * sizeof(unsigned int), &sphereIndices[0], GL_STATIC_DRAW);
+
+	// vertex positions
+	glEnableVertexAttribArray(0);
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
+
+	// vertex normals
+	glEnableVertexAttribArray(1);
+	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
+
 
 	// Create camera
 	pCamera = new Camera(SCR_WIDTH, SCR_HEIGHT, glm::vec3(0.0, 3.0, 3.0));
@@ -817,7 +1058,10 @@ int main()
 
 	//std::vector<glm::vec3> treePositions = GenerateTreePositions(200, 200.0f, 180.0f);
 
-	std::vector<glm::vec3> rockPositions = GenerateRockPositions(10, 20.0f);
+	for (auto& pos : rockPositions)
+	{
+		pos.y -= distanceBetweenGrass * 3;
+	}
 
 	wchar_t buffer[MAX_PATH];
 	GetCurrentDirectoryW(MAX_PATH, buffer);
@@ -862,6 +1106,10 @@ int main()
 	std::string rotiMariObjFileName = (currentPath + "\\Models\\RotiMari\\rotimari.obj");
 	Model rotiMariModel(rotiMariObjFileName, false);
 
+	std::string signalFileName = (currentPath + "\\Models\\RailwayLight\\ImageToStl.com_semafor.obj");
+	std::cout << "Attempting to load signal model from: " << signalFileName << std::endl;
+	Model signalModel(signalFileName, false);
+	std::cout << "Signal model loaded successfully!" << std::endl;
 
 
 	audioManager = new AudioManager();
@@ -1055,9 +1303,9 @@ int main()
 		lightingWithTextureShader.setMat4("model", rotiMiciModelMatrix);
 		rotiMiciModel.Draw(lightingWithTextureShader);
 
-			//Mari
+		//Mari
 		glm::mat4 rotiMariModelMatrix = glm::mat4(1.0);
-		rotiMariModelMatrix = glm::translate(rotiMariModelMatrix, trainPos + glm::vec3(0.0f,0.45f,0.85f));
+		rotiMariModelMatrix = glm::translate(rotiMariModelMatrix, trainPos + glm::vec3(0.0f, 0.45f, 0.85f));
 		rotiMariModelMatrix = glm::rotate(rotiMariModelMatrix, glm::radians(trainPos.z * 100), glm::vec3(1.0f, 0.0f, 0.0f));
 		rotiMariModelMatrix = glm::scale(rotiMariModelMatrix, glm::vec3(1.0f));
 		lightingWithTextureShader.setMat4("model", rotiMariModelMatrix);
@@ -1096,13 +1344,17 @@ int main()
 					pos.z -= distanceBetweenGrass;  // Folosim semnul corect pentru a muta în față
 				}
 				for (auto& pos : rockPositions) {
-					pos.z -= shiftDistance;
+					pos.y -= distanceBetweenGrass;
 				}
 				for (auto& pos : railPositions)
 				{
 					pos.z -= distanceBetweenGrass;
 				}
 				for (auto& pos : stationPosition)
+				{
+					pos.z -= distanceBetweenGrass;
+				}
+				for (auto& pos : lampPositions)
 				{
 					pos.z -= distanceBetweenGrass;
 				}
@@ -1116,8 +1368,8 @@ int main()
 			GrassLawnModel.Draw(lightingWithTextureShader);
 		}
 
-		
-		
+
+
 
 
 
@@ -1131,6 +1383,19 @@ int main()
 		//	treeModel.Draw(lightingWithTextureShader);
 		//}
 
+
+		//ROCKS
+		for (const auto& pos : rockPositions) {
+			glm::mat4 rockModelMatrix = glm::mat4(1.0f);
+			rockModelMatrix = glm::translate(rockModelMatrix, glm::vec3(pos.x, pos.z, pos.y));
+			rockModelMatrix = glm::rotate(rockModelMatrix, glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+			rockModelMatrix = glm::scale(rockModelMatrix, glm::vec3(0.2f));
+			lightingWithTextureShader.setMat4("model", rockModelMatrix);
+			rockModel.Draw(lightingWithTextureShader);
+		}
+
+
+
 		// Randare copaci
 		for (const auto& pos : treePositions) {
 			lightingWithTextureShader.use();
@@ -1143,7 +1408,7 @@ int main()
 		}
 
 		//RAILROAD
-		for (const auto& pos : railPositions) 
+		for (const auto& pos : railPositions)
 		{
 			/*glm::vec3 segmentPosition = -(railStartPos + i * 18.0f * railDirection);*/
 			glm::mat4 railroadModelMatrix = glm::mat4(1.0f);
@@ -1153,6 +1418,24 @@ int main()
 			railroadModel.Draw(lightingWithTextureShader);
 		}
 
+		//LIGHTS
+		for (const auto& pos : lampPositions)
+		{
+			lightingWithTextureShader.use();
+			PlaceStationSignals(lightingWithTextureShader, lampShader, signalModel, pos.z);
+			float trainDistance = glm::length(trainPos - glm::vec3(0.0f, 0.0f, 5.0f));
+			glm::vec3 signalColor;
+
+			if (trainDistance < 10.0f) {
+				signalColor = glm::vec3(1.0f, 0.0f, 0.0f); // roșu când trenul e aproape 
+			}
+			else {
+				signalColor = glm::vec3(0.0f, 1.0f, 0.0f); // verde când e departe 
+			}
+			lightingWithTextureShader.SetVec3("signalLightColor1", signalColor);
+			lightingWithTextureShader.SetVec3("signalLightColor2", signalColor);
+			lightingWithTextureShader.use();
+		}
 
 
 
