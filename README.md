@@ -1,7 +1,5 @@
-# Proiect-G3D
-Simularea călătoriei cu trenul (București - Brașov), camera poate fi în vagon sau în afara trenului. Se simuleaza si panoul de comanda al mecanicului de locomotiva
+Train Journey Simulation on Brasov-București Route in OpenGL is an immersive project that brings a classic train journey to life using advanced computer graphics techniques. The simulation leverages OpenGL to render a detailed and dynamic environment along the historic route. The scene is built using .obj models, which accurately represent the train, trees, railway tracks, stones, terrain, stations, and traffic lights, providing an authentic visual experience.
 
-Participanti la proiect:
-Slav Gabriel-Bogdan
-Visoiu Radu
-Ionita Stefania Georgiana
+The terrain is generated dynamically, creating a varied and realistic landscape that mirrors the natural features found along the Brasov-București route. This attention to detail ensures that the environment feels both engaging and true to life. Additionally, the simulation accounts for the motion of the train wheels, which rotate accurately in response to the train's movement, further enhancing the overall realism.
+
+One of the standout features of the project is the implementation of custom shaders to produce lifelike shadows. These shaders contribute to a more immersive atmosphere by ensuring that light and shadow interact naturally within the scene. Overall, this project is a blend of technical prowess and artistic creativity, offering a visually compelling simulation that captures the essence of a train journey through one of Romania’s most scenic routes.
